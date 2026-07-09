@@ -3,16 +3,48 @@ import type { CategoryId } from './types';
 /**
  * AI generation engine.
  *
- * Uses OpenAI when EXPO_PUBLIC_OPENAI_API_KEY is set, and falls back to
- * realistic, category-aware mock content otherwise (so the app stays testable
- * offline / without a key). The UI calls generate() and only depends on its
+ * Calls the server-side `generate-text` bilt-cloud function, which holds the
+ * OpenAI key and returns generated text. If the backend is unreachable (or not
+ * configured), it falls back to realistic, category-aware mock content so the
+ * app stays usable. The UI calls generate() and only depends on its
  * Promise<string> contract.
  */
 
 const DELAY_MS = 1100;
 
-const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-const OPENAI_MODEL = 'gpt-4o-mini';
+const BILT_URL = process.env.EXPO_PUBLIC_BILT_URL;
+const BILT_ANON_KEY = process.env.EXPO_PUBLIC_BILT_ANON_KEY;
+
+async function generateWithBackend(categoryId: CategoryId, prompt: string): Promise<string | null> {
+  if (!BILT_URL || !BILT_ANON_KEY) return null;
+  try {
+    const res = await fetch(`${BILT_URL}/functions/v1/generate-text`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: BILT_ANON_KEY,
+        Authorization: `Bearer ${BILT_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        categoryId,
+        prompt,
+        systemPrompt: buildSystemPrompt(categoryId),
+      }),
+    });
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    let text = '';
+    if (data !== null && typeof data === 'object' && 'text' in data) {
+      const raw = (data as { text: unknown }).text;
+      if (typeof raw === 'string') {
+        text = raw.trim();
+      }
+    }
+    return text || null;
+  } catch {
+    return null;
+  }
+}
 
 export function buildSystemPrompt(categoryId: CategoryId): string {
   const map: Record<CategoryId, string> = {
@@ -158,6 +190,9 @@ function generateMock(categoryId: CategoryId, prompt: string): string {
 }
 
 export async function generate(categoryId: CategoryId, prompt: string): Promise<string> {
+  const real = await generateWithBackend(categoryId, prompt);
+  if (real) return real;
+  // Fallback: backend unavailable — return mock content so the app stays usable.
   await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
   return generateMock(categoryId, prompt);
 }
