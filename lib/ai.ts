@@ -3,15 +3,16 @@ import type { CategoryId } from './types';
 /**
  * AI generation engine.
  *
- * Currently returns realistic, category-aware mock content so the full app is
- * testable offline. To connect a real provider (e.g. OpenAI):
- *   1. Add your API key as a secret (OPENAI_API_KEY).
- *   2. Replace the body of generate() with a fetch to your provider, passing
- *      buildSystemPrompt(categoryId) + the user's prompt.
- * The UI calls generate() and only depends on its Promise<string> contract.
+ * Uses OpenAI when EXPO_PUBLIC_OPENAI_API_KEY is set, and falls back to
+ * realistic, category-aware mock content otherwise (so the app stays testable
+ * offline / without a key). The UI calls generate() and only depends on its
+ * Promise<string> contract.
  */
 
 const DELAY_MS = 1100;
+
+const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+const OPENAI_MODEL = 'gpt-4o-mini';
 
 export function buildSystemPrompt(categoryId: CategoryId): string {
   const map: Record<CategoryId, string> = {
