@@ -1,6 +1,6 @@
-import { Home } from 'lucide-react-native';
 import { Tabs } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Clock, Settings, Sparkles } from 'lucide-react-native';
 import { useThemeColor } from 'heroui-native';
 import { useUniwind } from 'uniwind';
 
@@ -21,13 +21,14 @@ export default function TabLayout() {
         screenOptions={{
           headerStyle: { backgroundColor: background },
           headerTintColor: foreground,
-          headerTitleStyle: { color: foreground },
+          headerTitleStyle: { color: foreground, fontFamily: 'Inter_600SemiBold' },
           headerShadowVisible: false,
           sceneStyle: { backgroundColor: background },
           tabBarStyle: {
             backgroundColor: background,
             borderTopColor: border,
           },
+          tabBarLabelStyle: { fontFamily: 'Inter_500Medium' },
           tabBarActiveTintColor: accent,
           tabBarInactiveTintColor: muted,
         }}
@@ -35,8 +36,22 @@ export default function TabLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Home',
-            tabBarIcon: ({ color, size }) => <Home color={color} size={size ?? 24} />,
+            title: 'Generate',
+            tabBarIcon: ({ color, size }) => <Sparkles color={color} size={size ?? 24} />,
+          }}
+        />
+        <Tabs.Screen
+          name="history"
+          options={{
+            title: 'History',
+            tabBarIcon: ({ color, size }) => <Clock color={color} size={size ?? 24} />,
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: 'Settings',
+            tabBarIcon: ({ color, size }) => <Settings color={color} size={size ?? 24} />,
           }}
         />
       </Tabs>
