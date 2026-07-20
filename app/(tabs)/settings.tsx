@@ -2,12 +2,12 @@ import { format } from 'date-fns';
 import { router } from 'expo-router';
 import { Button, Card, Separator, Text, useThemeColor } from 'heroui-native';
 import { Check, Crown, RefreshCw, Sparkles, Star } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, View } from 'react-native';
 
 import { FREE_DAILY_CREDITS, PRO_FEATURES } from '@/lib/catalog';
 import { useGenerationsStore } from '@/lib/generationsStore';
-import { useSubscriptionStore } from '@/lib/subscriptionStore';
+import { type KeyMode, useSubscriptionStore } from '@/lib/subscriptionStore';
 
 export default function SettingsScreen() {
   const [accent, muted, gold] = useThemeColor(['accent', 'muted', 'foreground']);
@@ -18,9 +18,15 @@ export default function SettingsScreen() {
   const cancel = useSubscriptionStore((s) => s.cancel);
   const email = useSubscriptionStore((s) => s.email);
   const isProcessing = useSubscriptionStore((s) => s.isProcessing);
+  const getKeyMode = useSubscriptionStore((s) => s.getKeyMode);
   const historyCount = useGenerationsStore((s) => s.history.length);
 
   const [restoring, setRestoring] = useState(false);
+  const [keyMode, setKeyMode] = useState<KeyMode | null>(null);
+
+  useEffect(() => {
+    void getKeyMode().then(setKeyMode);
+  }, [getKeyMode]);
 
   async function onRestore() {
     if (!email?.includes('@')) {
@@ -100,6 +106,19 @@ export default function SettingsScreen() {
         />
         <Separator />
         <Row label="Saved generations" value={`${historyCount}`} />
+        <Separator />
+        <Row
+          label="Payment mode"
+          value={
+            keyMode === null
+              ? '…'
+              : keyMode === 'live'
+                ? 'Live'
+                : keyMode === 'test'
+                  ? 'Test'
+                  : 'Not set'
+          }
+        />
         <Separator />
         <PressableRow
           label="Restore subscription"
