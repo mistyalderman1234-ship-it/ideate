@@ -35,7 +35,7 @@ async function generateWithBackend(categoryId: CategoryId, prompt: string): Prom
     const data: unknown = await res.json();
     let text = '';
     if (data !== null && typeof data === 'object' && 'text' in data) {
-      const raw = (data as { text: unknown }).text;
+      const raw = data.text;
       if (typeof raw === 'string') {
         text = raw.trim();
       }

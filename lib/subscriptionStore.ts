@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Purchases, {
   type CustomerInfo,
+  PACKAGE_TYPE,
   type PurchasesOffering,
   type PurchasesPackage,
 } from 'react-native-purchases';
@@ -34,8 +35,8 @@ const ENTITLEMENT_ID = 'pro';
 function planIdForPackage(pkg: PurchasesPackage): PlanId | null {
   const id = pkg.identifier.toLowerCase();
   const type = pkg.packageType;
-  if (type === 'ANNUAL' || id.includes('annual') || id.includes('year')) return 'yearly';
-  if (type === 'MONTHLY' || id.includes('month')) return 'monthly';
+  if (type === PACKAGE_TYPE.ANNUAL || id.includes('annual') || id.includes('year')) return 'yearly';
+  if (type === PACKAGE_TYPE.MONTHLY || id.includes('month')) return 'monthly';
   return null;
 }
 
