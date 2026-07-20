@@ -24,6 +24,7 @@ import {
 
 import { initPostHog } from '@/lib/posthog';
 import { registerServiceWorker } from '@/lib/registerServiceWorker';
+import { useSubscriptionStore } from '@/lib/subscriptionStore';
 import { reportErrorToParent } from '@/lib/reportPreviewError';
 import { InstallPrompt } from '@/components/InstallPrompt';
 
@@ -126,6 +127,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     registerServiceWorker();
+  }, []);
+
+  useEffect(() => {
+    // RevenueCat only runs on native builds; web preview uses persisted state.
+    if (Platform.OS !== 'web') {
+      void useSubscriptionStore.getState().configure();
+    }
   }, []);
 
   useEffect(() => {

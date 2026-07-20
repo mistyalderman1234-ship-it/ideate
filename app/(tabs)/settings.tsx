@@ -32,10 +32,14 @@ export default function SettingsScreen() {
   }
 
   function onCancel() {
-    Alert.alert('Cancel subscription', 'This will remove Pro access in this demo.', [
-      { text: 'Keep Pro', style: 'cancel' },
-      { text: 'Cancel Pro', style: 'destructive', onPress: cancel },
-    ]);
+    Alert.alert(
+      'Manage subscription',
+      'Subscriptions are managed through the App Store or Google Play. This removes Pro access on this device until your next sign-in.',
+      [
+        { text: 'Keep Pro', style: 'cancel' },
+        { text: 'Remove access', style: 'destructive', onPress: cancel },
+      ],
+    );
   }
 
   return (

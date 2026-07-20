@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 
 import { PLANS, PRO_FEATURES } from '@/lib/catalog';
-import { useSubscriptionStore } from '@/lib/subscriptionStore';
+import { priceForPlan, useSubscriptionStore } from '@/lib/subscriptionStore';
 import type { PlanId } from '@/lib/types';
 
 export default function PaywallScreen() {
@@ -19,12 +19,21 @@ export default function PaywallScreen() {
   const purchase = useSubscriptionStore((s) => s.purchase);
   const isProcessing = useSubscriptionStore((s) => s.isProcessing);
   const restore = useSubscriptionStore((s) => s.restore);
+  const packages = useSubscriptionStore((s) => s.packages);
 
   const [selected, setSelected] = useState<PlanId>('yearly');
 
   async function onSubscribe() {
-    await purchase(selected);
-    router.back();
+    try {
+      const ok = await purchase(selected);
+      if (ok) router.back();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Something went wrong.';
+      // User-cancelled purchases surface as an error too; keep the copy neutral.
+      if (!message.toLowerCase().includes('cancel')) {
+        Alert.alert('Purchase failed', message);
+      }
+    }
   }
 
   async function onRestore() {
@@ -72,6 +81,7 @@ export default function PaywallScreen() {
         <View className="gap-3">
           {PLANS.map((plan) => {
             const active = plan.id === selected;
+            const livePrice = priceForPlan(packages, plan.id);
             return (
               <Pressable key={plan.id} onPress={() => setSelected(plan.id)}>
                 <View
@@ -94,7 +104,7 @@ export default function PaywallScreen() {
                       </Text>
                     </View>
                     <View className="flex-row items-baseline">
-                      <Text className="text-lg font-bold">{plan.price}</Text>
+                      <Text className="text-lg font-bold">{livePrice ?? plan.price}</Text>
                       <Text color="muted" className="text-sm">
                         {plan.period}
                       </Text>
