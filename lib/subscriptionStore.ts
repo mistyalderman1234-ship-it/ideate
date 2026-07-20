@@ -70,14 +70,6 @@ function isKeyModeResponse(value: unknown): value is { mode: KeyMode } {
   return mode === 'live' || mode === 'test' || mode === 'unknown';
 }
 
-function isVerifyResponse(value: unknown): value is { verified: boolean } {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    typeof (value as { verified?: unknown }).verified === 'boolean'
-  );
-}
-
 function isStatusResponse(value: unknown): value is StatusResponse {
   if (value === null || typeof value !== 'object') return false;
   const candidate = value as { active?: unknown; plan?: unknown; since?: unknown };
@@ -105,10 +97,6 @@ interface SubscriptionState {
   setEmail: (email: string) => void;
   /** Report whether the server's Stripe key is live, test, or missing. */
   getKeyMode: () => Promise<KeyMode>;
-  /** Email a 6-digit verification code to the given address. */
-  sendCode: (email: string) => Promise<void>;
-  /** Confirm the code. Resolves true when the email is verified. */
-  verifyCode: (email: string, code: string) => Promise<boolean>;
   /** Create a Stripe Checkout session and redirect the browser to it. */
   startCheckout: (planId: PlanId, email: string) => Promise<void>;
   /** Re-check Stripe for an active subscription on the saved email. */
@@ -136,25 +124,6 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         } catch {
           return 'unknown';
         }
-      },
-
-      sendCode: async (email) => {
-        const cleanEmail = email.trim().toLowerCase();
-        if (!cleanEmail.includes('@')) {
-          throw new Error('Please enter a valid email address.');
-        }
-        await callFunction({ action: 'send-code', email: cleanEmail });
-        set({ email: cleanEmail });
-      },
-
-      verifyCode: async (email, code) => {
-        const cleanEmail = email.trim().toLowerCase();
-        const response = await callFunction({
-          action: 'verify-code',
-          email: cleanEmail,
-          code: code.trim(),
-        });
-        return isVerifyResponse(response) ? response.verified : false;
       },
 
       startCheckout: async (planId, email) => {
