@@ -30,7 +30,7 @@ interface StatusResponse {
   since: number | null;
 }
 
-async function callFunction<T>(body: Record<string, unknown>): Promise<T> {
+async function callFunction(body: Record<string, unknown>): Promise<unknown> {
   if (!BILT_URL || !BILT_ANON_KEY) {
     throw new Error('Payments are not available right now.');
   }
@@ -51,7 +51,25 @@ async function callFunction<T>(body: Record<string, unknown>): Promise<T> {
         : 'Something went wrong.';
     throw new Error(message);
   }
-  return data as T;
+  return data;
+}
+
+function isCheckoutSessionResponse(value: unknown): value is { url: string } {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    typeof (value as { url?: unknown }).url === 'string'
+  );
+}
+
+function isStatusResponse(value: unknown): value is StatusResponse {
+  if (value === null || typeof value !== 'object') return false;
+  const candidate = value as { active?: unknown; plan?: unknown; since?: unknown };
+  return (
+    typeof candidate.active === 'boolean' &&
+    (candidate.plan === null || typeof candidate.plan === 'string') &&
+    (candidate.since === null || typeof candidate.since === 'number')
+  );
 }
 
 function currentOrigin(): string {
@@ -96,12 +114,16 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         }
         set({ isProcessing: true, email: cleanEmail });
         try {
-          const { url } = await callFunction<{ url: string }>({
+          const response = await callFunction({
             action: 'create-session',
             email: cleanEmail,
             plan: planId,
             origin: currentOrigin(),
           });
+          if (!isCheckoutSessionResponse(response)) {
+            throw new Error('Something went wrong.');
+          }
+          const { url } = response;
           if (Platform.OS === 'web' && typeof window !== 'undefined') {
             window.location.assign(url);
             // Navigation unloads the page; keep processing until then.
@@ -119,17 +141,20 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         if (!email.includes('@')) return get().isPro;
         set({ isProcessing: true });
         try {
-          const status = await callFunction<StatusResponse>({
+          const response = await callFunction({
             action: 'check-status',
             email,
           });
+          if (!isStatusResponse(response)) {
+            return get().isPro;
+          }
           set({
-            isPro: status.active,
-            activePlan: status.plan,
-            purchasedAt: status.since,
+            isPro: response.active,
+            activePlan: response.plan,
+            purchasedAt: response.since,
             email,
           });
-          return status.active;
+          return response.active;
         } catch {
           return get().isPro;
         } finally {
