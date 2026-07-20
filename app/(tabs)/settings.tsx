@@ -14,19 +14,24 @@ export default function SettingsScreen() {
   const isPro = useSubscriptionStore((s) => s.isPro);
   const activePlan = useSubscriptionStore((s) => s.activePlan);
   const purchasedAt = useSubscriptionStore((s) => s.purchasedAt);
-  const restore = useSubscriptionStore((s) => s.restore);
+  const refreshStatus = useSubscriptionStore((s) => s.refreshStatus);
   const cancel = useSubscriptionStore((s) => s.cancel);
+  const email = useSubscriptionStore((s) => s.email);
   const isProcessing = useSubscriptionStore((s) => s.isProcessing);
   const historyCount = useGenerationsStore((s) => s.history.length);
 
   const [restoring, setRestoring] = useState(false);
 
   async function onRestore() {
+    if (!email?.includes('@')) {
+      router.push('/paywall');
+      return;
+    }
     setRestoring(true);
-    const ok = await restore();
+    const ok = await refreshStatus();
     setRestoring(false);
     Alert.alert(
-      ok ? 'Purchases restored' : 'Nothing to restore',
+      ok ? 'Subscription restored' : 'Nothing to restore',
       ok ? 'Your Pro subscription is active.' : 'We could not find an active subscription.',
     );
   }
@@ -34,7 +39,7 @@ export default function SettingsScreen() {
   function onCancel() {
     Alert.alert(
       'Manage subscription',
-      'Subscriptions are managed through the App Store or Google Play. This removes Pro access on this device until your next sign-in.',
+      'Manage or cancel your subscription anytime through the link in your Stripe receipt email. Removing access here hides Pro on this device until you restore.',
       [
         { text: 'Keep Pro', style: 'cancel' },
         { text: 'Remove access', style: 'destructive', onPress: cancel },
@@ -97,7 +102,7 @@ export default function SettingsScreen() {
         <Row label="Saved generations" value={`${historyCount}`} />
         <Separator />
         <PressableRow
-          label="Restore purchases"
+          label="Restore subscription"
           icon={<RefreshCw color={muted} size={18} />}
           loading={restoring || isProcessing}
           onPress={onRestore}

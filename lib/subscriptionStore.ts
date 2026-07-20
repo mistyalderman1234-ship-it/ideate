@@ -1,68 +1,79 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import Purchases, {
-  type CustomerInfo,
-  PACKAGE_TYPE,
-  type PurchasesOffering,
-  type PurchasesPackage,
-} from 'react-native-purchases';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import type { PlanId } from './types';
 
 /**
- * Subscription / entitlement layer, wired to RevenueCat.
+ * Subscription / entitlement layer for the WEB app, wired to Stripe Checkout.
  *
- * Setup before publishing:
- *   1. Add your RevenueCat public SDK keys as env vars (see below).
- *   2. In the RevenueCat dashboard create an entitlement `pro`, an offering
- *      `default`, and two packages: monthly ($rc_monthly) and annual
- *      ($rc_annual). Attach your App Store / Play Store products to them.
- *   3. Products/prices are pulled live from the offering, so the paywall always
- *      shows real localized pricing.
+ * Flow (email-only, no accounts):
+ *   1. User enters their email on the paywall and picks a plan.
+ *   2. startCheckout() asks the `stripe-checkout` edge function for a Checkout
+ *      Session URL and redirects the browser to Stripe.
+ *   3. On return (?status=success) the paywall calls refreshStatus(), which
+ *      queries Stripe (via the function) for an active subscription on that
+ *      email and flips `isPro`.
+ *   4. "Restore" is the same refreshStatus() by email — works on any device.
  *
- * The rest of the app only reads `isPro`, so no UI changes are needed when the
- * real store is connected.
+ * The rest of the app only reads `isPro`, so no other UI depends on Stripe.
+ * Prices are inline in the edge function (matches lib/catalog.ts).
  */
 
-const IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
-const ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY;
+const BILT_URL = process.env.EXPO_PUBLIC_BILT_URL;
+const BILT_ANON_KEY = process.env.EXPO_PUBLIC_BILT_ANON_KEY;
 
-const ENTITLEMENT_ID = 'pro';
-
-/** Map a RevenueCat package to our internal PlanId. */
-function planIdForPackage(pkg: PurchasesPackage): PlanId | null {
-  const id = pkg.identifier.toLowerCase();
-  const type = pkg.packageType;
-  if (type === PACKAGE_TYPE.ANNUAL || id.includes('annual') || id.includes('year')) return 'yearly';
-  if (type === PACKAGE_TYPE.MONTHLY || id.includes('month')) return 'monthly';
-  return null;
+interface StatusResponse {
+  active: boolean;
+  plan: PlanId | null;
+  since: number | null;
 }
 
-function isProFromInfo(info: CustomerInfo): boolean {
-  return typeof info.entitlements.active[ENTITLEMENT_ID] !== 'undefined';
+async function callFunction<T>(body: Record<string, unknown>): Promise<T> {
+  if (!BILT_URL || !BILT_ANON_KEY) {
+    throw new Error('Payments are not available right now.');
+  }
+  const res = await fetch(`${BILT_URL}/functions/v1/stripe-checkout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: BILT_ANON_KEY,
+      Authorization: `Bearer ${BILT_ANON_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const data: unknown = await res.json();
+  if (!res.ok) {
+    const message =
+      data !== null && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+        ? data.error
+        : 'Something went wrong.';
+    throw new Error(message);
+  }
+  return data as T;
 }
 
-function activePlanFromInfo(info: CustomerInfo): PlanId | null {
-  const entitlement = info.entitlements.active[ENTITLEMENT_ID];
-  if (!entitlement) return null;
-  return entitlement.productIdentifier.toLowerCase().includes('year') ? 'yearly' : 'monthly';
+function currentOrigin(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return '';
 }
 
 interface SubscriptionState {
   isPro: boolean;
   activePlan: PlanId | null;
   purchasedAt: number | null;
+  email: string | null;
   isProcessing: boolean;
   hydrated: boolean;
-  configured: boolean;
-  offering: PurchasesOffering | null;
-  packages: PurchasesPackage[];
-  configure: () => Promise<void>;
-  loadOfferings: () => Promise<void>;
-  purchase: (planId: PlanId) => Promise<boolean>;
-  restore: () => Promise<boolean>;
+  setEmail: (email: string) => void;
+  /** Create a Stripe Checkout session and redirect the browser to it. */
+  startCheckout: (planId: PlanId, email: string) => Promise<void>;
+  /** Re-check Stripe for an active subscription on the saved email. */
+  refreshStatus: (emailOverride?: string) => Promise<boolean>;
+  /** Clear local Pro state. Real cancellation happens in Stripe's portal. */
   cancel: () => void;
 }
 
@@ -72,83 +83,53 @@ export const useSubscriptionStore = create<SubscriptionState>()(
       isPro: false,
       activePlan: null,
       purchasedAt: null,
+      email: null,
       isProcessing: false,
       hydrated: false,
-      configured: false,
-      offering: null,
-      packages: [],
 
-      configure: async () => {
-        if (get().configured) return;
-        const apiKey = Platform.OS === 'ios' ? IOS_API_KEY : ANDROID_API_KEY;
-        if (!apiKey) {
-          // Keys not set yet. Leave the store in a safe, non-crashing state so
-          // the app still runs in preview / before publishing.
-          set({ configured: false });
-          return;
+      setEmail: (email) => set({ email: email.trim().toLowerCase() }),
+
+      startCheckout: async (planId, email) => {
+        const cleanEmail = email.trim().toLowerCase();
+        if (!cleanEmail.includes('@')) {
+          throw new Error('Please enter a valid email address.');
         }
+        set({ isProcessing: true, email: cleanEmail });
         try {
-          Purchases.configure({ apiKey });
-          set({ configured: true });
-
-          // Reflect current entitlement immediately, then keep in sync.
-          const info = await Purchases.getCustomerInfo();
-          set({ isPro: isProFromInfo(info), activePlan: activePlanFromInfo(info) });
-
-          Purchases.addCustomerInfoUpdateListener((updated) => {
-            set({ isPro: isProFromInfo(updated), activePlan: activePlanFromInfo(updated) });
+          const { url } = await callFunction<{ url: string }>({
+            action: 'create-session',
+            email: cleanEmail,
+            plan: planId,
+            origin: currentOrigin(),
           });
-
-          await get().loadOfferings();
-        } catch {
-          set({ configured: false });
-        }
-      },
-
-      loadOfferings: async () => {
-        if (!get().configured) return;
-        try {
-          const offerings = await Purchases.getOfferings();
-          const current = offerings.current;
-          if (current) {
-            set({ offering: current, packages: current.availablePackages });
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.location.assign(url);
+            // Navigation unloads the page; keep processing until then.
+            return;
           }
-        } catch {
-          // Keep any previously loaded offering; paywall falls back to catalog.
-        }
-      },
-
-      purchase: async (planId) => {
-        if (!get().configured) {
-          throw new Error('Purchases are not available yet. Please try again later.');
-        }
-        const pkg = get().packages.find((p) => planIdForPackage(p) === planId);
-        if (!pkg) {
-          throw new Error('That plan is not available right now.');
-        }
-        set({ isProcessing: true });
-        try {
-          const { customerInfo } = await Purchases.purchasePackage(pkg);
-          const pro = isProFromInfo(customerInfo);
-          set({
-            isPro: pro,
-            activePlan: pro ? planId : get().activePlan,
-            purchasedAt: pro ? Date.now() : get().purchasedAt,
-          });
-          return pro;
+          throw new Error('Subscriptions are available on the web app.');
         } finally {
+          // If we didn't redirect (error/native), clear the spinner.
           set({ isProcessing: false });
         }
       },
 
-      restore: async () => {
-        if (!get().configured) return get().isPro;
+      refreshStatus: async (emailOverride) => {
+        const email = (emailOverride ?? get().email ?? '').trim().toLowerCase();
+        if (!email.includes('@')) return get().isPro;
         set({ isProcessing: true });
         try {
-          const info = await Purchases.restorePurchases();
-          const pro = isProFromInfo(info);
-          set({ isPro: pro, activePlan: activePlanFromInfo(info) });
-          return pro;
+          const status = await callFunction<StatusResponse>({
+            action: 'check-status',
+            email,
+          });
+          set({
+            isPro: status.active,
+            activePlan: status.plan,
+            purchasedAt: status.since,
+            email,
+          });
+          return status.active;
         } catch {
           return get().isPro;
         } finally {
@@ -156,9 +137,6 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         }
       },
 
-      // Store subscriptions are cancelled through the App Store / Play Store, not
-      // in-app. This only clears local demo state; real entitlement always comes
-      // from RevenueCat on next launch.
       cancel: () => set({ isPro: false, activePlan: null, purchasedAt: null }),
     }),
     {
@@ -168,6 +146,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         isPro: state.isPro,
         activePlan: state.activePlan,
         purchasedAt: state.purchasedAt,
+        email: state.email,
       }),
       onRehydrateStorage: () => () => {
         useSubscriptionStore.setState({ hydrated: true });
@@ -175,9 +154,3 @@ export const useSubscriptionStore = create<SubscriptionState>()(
     },
   ),
 );
-
-/** Live localized price string for a plan, or null if offerings aren't loaded. */
-export function priceForPlan(packages: PurchasesPackage[], planId: PlanId): string | null {
-  const pkg = packages.find((p) => planIdForPackage(p) === planId);
-  return pkg?.product.priceString ?? null;
-}

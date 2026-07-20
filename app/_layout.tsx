@@ -130,9 +130,10 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    // RevenueCat only runs on native builds; web preview uses persisted state.
-    if (Platform.OS !== 'web') {
-      void useSubscriptionStore.getState().configure();
+    // On web boot, re-verify the saved email's subscription against Stripe so
+    // Pro stays accurate across devices and after cancellations.
+    if (Platform.OS === 'web') {
+      void useSubscriptionStore.getState().refreshStatus();
     }
   }, []);
 

@@ -1,11 +1,11 @@
-import { router } from 'expo-router';
-import { Button, Spinner, Text, useThemeColor } from 'heroui-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Button, Input, Spinner, Text, TextField, useThemeColor } from 'heroui-native';
 import { Check, Crown, X } from 'lucide-react-native';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { PLANS, PRO_FEATURES } from '@/lib/catalog';
-import { priceForPlan, useSubscriptionStore } from '@/lib/subscriptionStore';
+import { useSubscriptionStore } from '@/lib/subscriptionStore';
 import type { PlanId } from '@/lib/types';
 
 export default function PaywallScreen() {
@@ -16,37 +16,66 @@ export default function PaywallScreen() {
     'border',
     'warning',
   ]);
-  const purchase = useSubscriptionStore((s) => s.purchase);
+  const params = useLocalSearchParams<{ status?: string }>();
+  const startCheckout = useSubscriptionStore((s) => s.startCheckout);
+  const refreshStatus = useSubscriptionStore((s) => s.refreshStatus);
   const isProcessing = useSubscriptionStore((s) => s.isProcessing);
-  const restore = useSubscriptionStore((s) => s.restore);
-  const packages = useSubscriptionStore((s) => s.packages);
+  const savedEmail = useSubscriptionStore((s) => s.email);
 
   const [selected, setSelected] = useState<PlanId>('yearly');
+  const [email, setEmail] = useState(savedEmail ?? '');
+  const [verifying, setVerifying] = useState(false);
+
+  // Returning from Stripe Checkout: verify the subscription, then close.
+  useEffect(() => {
+    if (params.status === 'success') {
+      setVerifying(true);
+      void refreshStatus().then((ok) => {
+        setVerifying(false);
+        if (ok) {
+          Alert.alert('Welcome to Pro', 'Your subscription is active. Enjoy!');
+          router.back();
+        } else {
+          Alert.alert(
+            'Almost there',
+            'We could not confirm your subscription yet. It can take a moment — tap Restore to check again.',
+          );
+        }
+      });
+    }
+  }, [params.status, refreshStatus]);
 
   async function onSubscribe() {
     try {
-      const ok = await purchase(selected);
-      if (ok) router.back();
+      await startCheckout(selected, email);
+      // On web this redirects away; nothing else to do.
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Something went wrong.';
-      // User-cancelled purchases surface as an error too; keep the copy neutral.
-      if (!message.toLowerCase().includes('cancel')) {
-        Alert.alert('Purchase failed', message);
-      }
+      Alert.alert('Could not start checkout', message);
     }
   }
 
   async function onRestore() {
-    const ok = await restore();
+    if (!email.includes('@')) {
+      Alert.alert('Enter your email', 'Enter the email you subscribed with to restore access.');
+      return;
+    }
+    const ok = await refreshStatus(email);
     if (ok) router.back();
-    else Alert.alert('Nothing to restore', 'No active subscription was found.');
+    else Alert.alert('Nothing to restore', 'No active subscription was found for that email.');
   }
 
+  const busy = isProcessing || verifying;
+
   return (
-    <View className="bg-background flex-1">
+    <KeyboardAvoidingView
+      className="bg-background flex-1"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <ScrollView
         className="flex-1"
         contentContainerClassName="p-5 pb-4 gap-6"
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View className="items-end">
@@ -81,7 +110,6 @@ export default function PaywallScreen() {
         <View className="gap-3">
           {PLANS.map((plan) => {
             const active = plan.id === selected;
-            const livePrice = priceForPlan(packages, plan.id);
             return (
               <Pressable key={plan.id} onPress={() => setSelected(plan.id)}>
                 <View
@@ -104,7 +132,7 @@ export default function PaywallScreen() {
                       </Text>
                     </View>
                     <View className="flex-row items-baseline">
-                      <Text className="text-lg font-bold">{livePrice ?? plan.price}</Text>
+                      <Text className="text-lg font-bold">{plan.price}</Text>
                       <Text color="muted" className="text-sm">
                         {plan.period}
                       </Text>
@@ -124,14 +152,32 @@ export default function PaywallScreen() {
             );
           })}
         </View>
+
+        <View className="gap-1.5">
+          <Text className="text-sm font-medium">Email</Text>
+          <TextField>
+            <Input
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              inputMode="email"
+              autoComplete="email"
+            />
+          </TextField>
+          <Text color="muted" className="text-xs">
+            We use your email to link your subscription. No account needed.
+          </Text>
+        </View>
       </ScrollView>
 
       <View className="border-border pb-safe-offset-5 gap-3 border-t p-5">
-        <Button variant="primary" size="lg" isDisabled={isProcessing} onPress={onSubscribe}>
-          {isProcessing ? <Spinner color="#fff" /> : 'Start Pro'}
+        <Button variant="primary" size="lg" isDisabled={busy} onPress={onSubscribe}>
+          {busy ? <Spinner color="#fff" /> : 'Continue to checkout'}
         </Button>
         <View className="flex-row items-center justify-center gap-4">
-          <Pressable onPress={onRestore} hitSlop={8}>
+          <Pressable onPress={onRestore} hitSlop={8} disabled={busy}>
             <Text color="muted" className="text-sm">
               Restore
             </Text>
@@ -144,6 +190,6 @@ export default function PaywallScreen() {
           </Text>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
