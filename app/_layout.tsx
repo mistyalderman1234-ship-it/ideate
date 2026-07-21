@@ -21,6 +21,7 @@ import {
   SplashScreen,
   Stack,
 } from 'expo-router';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import { initPostHog } from '@/lib/posthog';
 import { registerServiceWorker } from '@/lib/registerServiceWorker';
@@ -152,6 +153,7 @@ export default function RootLayout() {
       <HeroUINativeProvider>
         <RootStack />
         <InstallPrompt />
+        {Platform.OS === 'web' && <SpeedInsights />}
       </HeroUINativeProvider>
     </GestureHandlerRootView>
   );
