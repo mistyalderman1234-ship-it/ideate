@@ -3,6 +3,7 @@ import { Button, Card, Chip, Spinner, Text, useThemeColor } from 'heroui-native'
 import { Lock } from 'lucide-react-native';
 import { useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -76,6 +77,9 @@ export default function GenerateScreen() {
       });
       setPrompt('');
       router.push({ pathname: '/result/[id]', params: { id: generation.id } });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
+      Alert.alert('Generation failed', message);
     } finally {
       setLoading(false);
     }

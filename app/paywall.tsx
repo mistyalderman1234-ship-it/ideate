@@ -89,7 +89,7 @@ export default function PaywallScreen() {
             <Crown color={accent} size={30} />
           </View>
           <Text.Heading type="h1" align="center">
-            Unlock AI Business Pro
+            Unlock Ideate Pro
           </Text.Heading>
           <Text.Paragraph align="center" color="muted">
             Unlimited generations, every premium category, and priority AI.
@@ -189,6 +189,23 @@ export default function PaywallScreen() {
             Cancel anytime
           </Text>
         </View>
+        <Text color="muted" align="center" className="text-xs leading-4">
+          Subscriptions renew automatically until cancelled. By subscribing you agree to our{' '}
+          <Text
+            className="text-accent text-xs underline"
+            onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}
+          >
+            Terms
+          </Text>{' '}
+          and{' '}
+          <Text
+            className="text-accent text-xs underline"
+            onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'privacy' } })}
+          >
+            Privacy Policy
+          </Text>
+          .
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );

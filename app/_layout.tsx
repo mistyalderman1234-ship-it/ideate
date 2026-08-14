@@ -172,6 +172,7 @@ function RootStack() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="result/[id]" options={{ title: 'Result', presentation: 'card' }} />
       <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="legal/[doc]" options={{ title: 'Legal', presentation: 'card' }} />
     </Stack>
   );
 }

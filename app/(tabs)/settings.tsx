@@ -1,13 +1,24 @@
 import { format } from 'date-fns';
 import { router } from 'expo-router';
+import * as StoreReview from 'expo-store-review';
 import { Button, Card, Separator, Text, useThemeColor } from 'heroui-native';
-import { Check, Crown, RefreshCw, Sparkles, Star } from 'lucide-react-native';
+import { Check, ChevronRight, Crown, RefreshCw, Sparkles, Star } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { FREE_DAILY_CREDITS, PRO_FEATURES } from '@/lib/catalog';
 import { useGenerationsStore } from '@/lib/generationsStore';
 import { type KeyMode, useSubscriptionStore } from '@/lib/subscriptionStore';
+
+async function onRate() {
+  if (await StoreReview.isAvailableAsync()) {
+    await StoreReview.requestReview();
+  }
+}
+
+function openLegal(doc: 'privacy' | 'terms') {
+  router.push({ pathname: '/legal/[doc]', params: { doc } });
+}
 
 export default function SettingsScreen() {
   const [accent, muted, gold] = useThemeColor(['accent', 'muted', 'foreground']);
@@ -23,10 +34,17 @@ export default function SettingsScreen() {
 
   const [restoring, setRestoring] = useState(false);
   const [keyMode, setKeyMode] = useState<KeyMode | null>(null);
+  const [canReview, setCanReview] = useState(false);
 
   useEffect(() => {
     void getKeyMode().then(setKeyMode);
   }, [getKeyMode]);
+
+  // Only offer "Rate this app" where the store review flow can actually run.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    void StoreReview.hasAction().then(setCanReview);
+  }, []);
 
   async function onRestore() {
     if (!email?.includes('@')) {
@@ -127,20 +145,31 @@ export default function SettingsScreen() {
           onPress={onRestore}
         />
         <Separator />
+        {canReview && (
+          <>
+            <PressableRow
+              label="Rate this app"
+              icon={<Star color={muted} size={18} />}
+              onPress={() => void onRate()}
+            />
+            <Separator />
+          </>
+        )}
         <PressableRow
-          label="Rate this app"
-          icon={<Star color={muted} size={18} />}
-          onPress={() => Alert.alert('Thanks!', 'This would open the App Store rating prompt.')}
+          label="Privacy Policy"
+          icon={<ChevronRight color={muted} size={18} />}
+          onPress={() => openLegal('privacy')}
         />
         <Separator />
         <PressableRow
-          label="Privacy Policy"
-          onPress={() => void Linking.openURL('https://example.com/privacy')}
+          label="Terms of Service"
+          icon={<ChevronRight color={muted} size={18} />}
+          onPress={() => openLegal('terms')}
         />
       </Card>
 
       <Text color="muted" align="center" className="text-xs">
-        AI Business Assistant · v1.0.0
+        Ideate · AI Business Assistant · v1.0.0
       </Text>
     </ScrollView>
   );
