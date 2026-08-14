@@ -4,8 +4,9 @@ import type { CategoryId } from './types';
  * AI generation engine.
  *
  * Calls the server-side `generate-text` bilt-cloud function, which holds the
- * OpenAI key and returns generated text. Failures throw a message that is safe
- * to show the user — the app never substitutes fake output for a real result.
+ * provider key (Google Gemini) and returns generated text. Failures throw a
+ * message that is safe to show the user — the app never substitutes fake output
+ * for a real result.
  */
 
 const BILT_URL = process.env.EXPO_PUBLIC_BILT_URL;
