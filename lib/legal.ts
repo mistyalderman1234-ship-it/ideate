@@ -1,13 +1,12 @@
 /**
  * Legal copy shown in-app at /legal/privacy and /legal/terms.
  *
- * IMPORTANT: replace SUPPORT_EMAIL and COMPANY_NAME with your real details
- * before going live — Stripe and the app stores both require a reachable
- * contact and an accurate operator name.
+ * SUPPORT_EMAIL is the contact Stripe and the app stores will use to reach
+ * the operator, so it must stay a mailbox that is actually monitored.
  */
 
 export const COMPANY_NAME = 'Ideate';
-export const SUPPORT_EMAIL = 'support@ideate.app';
+export const SUPPORT_EMAIL = 'mistyalderman1234@gmail.com';
 export const LAST_UPDATED = 'August 14, 2026';
 
 export type LegalDoc = 'privacy' | 'terms';
