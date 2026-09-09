@@ -4,9 +4,14 @@ import type { CategoryId } from './types';
  * AI generation engine.
  *
  * Calls the server-side `generate-text` bilt-cloud function, which holds the
- * provider key (Google Gemini) and returns generated text. Failures throw a
- * message that is safe to show the user — the app never substitutes fake output
- * for a real result.
+ * provider key (Google Gemini, falling back to OpenAI) and returns generated
+ * text. Failures throw a message that is safe to show the user — the app never
+ * substitutes fake output for a real result.
+ *
+ * The function answers failures with HTTP 200 and an `error` field, because the
+ * platform bridge discards the body of a 5xx response. So `error` is checked
+ * before the status, and a non-ok status without a body means the request never
+ * reached the function.
  */
 
 const BILT_URL = process.env.EXPO_PUBLIC_BILT_URL;
@@ -83,8 +88,13 @@ export async function generate(categoryId: CategoryId, prompt: string): Promise<
     data = null;
   }
 
+  const serverMessage = readErrorMessage(data);
+  if (serverMessage) {
+    throw new Error(serverMessage);
+  }
+
   if (!res.ok) {
-    throw new Error(readErrorMessage(data) ?? OFFLINE_MESSAGE);
+    throw new Error(OFFLINE_MESSAGE);
   }
 
   const text = readText(data);

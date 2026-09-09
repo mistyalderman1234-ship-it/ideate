@@ -1,9 +1,8 @@
 import { router } from 'expo-router';
-import { Button, Card, Chip, Spinner, Text, useThemeColor } from 'heroui-native';
+import { Alert as UIAlert, Button, Card, Chip, Spinner, Text, useThemeColor } from 'heroui-native';
 import { Lock } from 'lucide-react-native';
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -43,6 +42,9 @@ export default function GenerateScreen() {
   const [selected, setSelected] = useState<Category>(CATEGORIES[0]);
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
+  // Shown inline rather than through React Native's Alert, which does nothing
+  // on web and would leave a failed generation looking like a dead button.
+  const [error, setError] = useState<string | null>(null);
 
   const outOfCredits = !isPro && remaining <= 0;
 
@@ -66,6 +68,7 @@ export default function GenerateScreen() {
     }
 
     setLoading(true);
+    setError(null);
     try {
       const output = await generate(selected.id, prompt.trim());
       if (!isPro) consumeCredit();
@@ -78,8 +81,7 @@ export default function GenerateScreen() {
       setPrompt('');
       router.push({ pathname: '/result/[id]', params: { id: generation.id } });
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
-      Alert.alert('Generation failed', message);
+      setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -177,6 +179,16 @@ export default function GenerateScreen() {
             />
           </View>
         </View>
+
+        {error !== null && (
+          <UIAlert status="danger">
+            <UIAlert.Indicator />
+            <UIAlert.Content>
+              <UIAlert.Title>Generation failed</UIAlert.Title>
+              <UIAlert.Description>{error}</UIAlert.Description>
+            </UIAlert.Content>
+          </UIAlert>
+        )}
 
         <Button
           variant="primary"
