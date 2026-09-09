@@ -4,7 +4,7 @@ import type { CategoryId } from './types';
  * AI generation engine.
  *
  * Calls the server-side `generate-text` bilt-cloud function, which holds the
- * provider key (Google Gemini, falling back to OpenAI) and returns generated
+ * provider keys (Groq first, then Gemini, then OpenAI) and returns generated
  * text. Failures throw a message that is safe to show the user — the app never
  * substitutes fake output for a real result.
  *
