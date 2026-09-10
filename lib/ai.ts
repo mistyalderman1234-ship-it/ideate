@@ -5,8 +5,10 @@ import type { CategoryId } from './types';
  *
  * Calls the server-side `generate-text` bilt-cloud function, which holds the
  * provider keys (Groq first, then Gemini, then OpenAI) and returns generated
- * text. Failures throw a message that is safe to show the user — the app never
- * substitutes fake output for a real result.
+ * text. The function routes each key to the provider its format belongs to, so
+ * which provider actually serves a request depends on which keys are healthy,
+ * not on anything the app sends. Failures throw a message that is safe to show
+ * the user — the app never substitutes fake output for a real result.
  *
  * The function answers failures with HTTP 200 and an `error` field, because the
  * platform bridge discards the body of a 5xx response. So `error` is checked
